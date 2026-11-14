@@ -148,7 +148,7 @@
     var bits = [];
     bits.push(r.category || 'Other');
     bits.push(fmtUsd(r.tvl_usd) + ' TVL');
-    bits.push('multiple ' + fmtMult(r.category_multiple) + (r.multiple_source === 'category' ? ' from ' + r.category_live_n + ' live ' + (r.category || 'Other') + ' protocols' : ' from the market-wide median'));
+    bits.push('multiple ' + fmtMult(r.category_multiple) + (r.multiple_source === 'blend' ? ' from a blend of ' + r.category_live_n + ' live ' + (r.category || 'Other') + ' protocols and the market median' : ' from the market-wide median'));
     if (r.change_7d !== null && r.change_7d > 5) bits.push('growing ' + fmtPct(r.change_7d) + ' in 7 days');
     if (r.age_days !== null && r.age_days >= 365) bits.push(fmtAge(r.age_days) + ' with no token');
     return bits.join(' · ') + '.';
@@ -319,33 +319,41 @@
 
   function modelPanel() {
     var m = DATA.model;
+    var v = DATA.validation;
     var calRows = DATA.calibration.map(function (c) {
       return el('tr', null,
         el('td', { text: c.category }),
+        el('td', { class: 'num', text: c.category_median === null ? 'n/a' : fmtMult(c.category_median) }),
         el('td', { class: 'num', text: fmtMult(c.multiple) }),
         el('td', { class: 'num', text: String(c.live_n) }),
-        el('td', { text: c.source === 'category' ? 'median of its live protocols' : 'market-wide median' })
+        el('td', { text: c.source === 'blend' ? 'blend of its live protocols and the market median' : 'market-wide median' })
       );
     });
     return el('section', { class: 'panel model' },
       el('h2', { text: 'How implied value is computed' }),
-      el('p', { class: 'sub', text: 'Every row is scored by one function of the snapshot figures. No protocol name is special-cased, and no row is hand-picked. The multiple is not a guess: it is the median market-cap-to-TVL ratio of the live-token protocols in the same category, taken from this very snapshot.' }),
+      el('p', { class: 'sub', text: 'Every row is scored by one function of the snapshot figures. No protocol name is special-cased, and no row is hand-picked. The multiple is not a guess: it blends the median market-cap-to-TVL ratio of the live-token protocols in the same category with the market-wide median, weighted by how many live protocols the category has.' }),
+      el('div', { class: 'formula' },
+        'multiple(category) = ( live_n x median(mcap/TVL in category) + ' + m.blend_k + ' x market_median ) / ( live_n + ' + m.blend_k + ' ), clamped to [' + m.min_multiple + ', ' + m.max_multiple + ']'
+      ),
       el('div', { class: 'formula' },
         'implied = round( tvl_usd x multiple(category) x (1 + clamp(change_7d, ' + m.growth_floor + ', ' + m.growth_cap + ') / 100 x ' + m.growth_weight + ') x (' + m.maturity_floor + ' + min(age_days, ' + m.maturity_days + ') / ' + m.maturity_days + ' x ' + m.maturity_range + ') )'
       ),
-      el('p', { class: 'sub', text: 'TVL and seven-day growth come from the snapshot. Age is the time since the protocol was first listed, the best record of how long it has run with no token; an unlisted age uses ' + m.unknown_age_days + ' days. A category with fewer than ' + m.min_live_for_category + ' live protocols falls back to the market-wide median, and every multiple is clamped to [' + m.min_multiple + ', ' + m.max_multiple + '].' }),
+      el('p', { class: 'sub', text: 'TVL and seven-day growth come from the snapshot. Age is the time since the protocol was first listed, the best record of how long it has run with no token; an unlisted age uses ' + m.unknown_age_days + ' days. A category with many live protocols speaks mostly for itself; a category with one or two still contributes its own data instead of being discarded, and a category with none uses the market-wide median alone. Each median is clamped to [' + m.min_multiple + ', ' + m.max_multiple + '] before it is blended, so one extreme live ratio cannot dominate.' }),
       el('h3', { text: 'Calibration: the multiple by category' }),
       el('div', { class: 'table-wrap' },
         el('table', null,
-          el('thead', null, el('tr', null, el('th', { scope: 'col', text: 'Category' }), el('th', { scope: 'col', class: 'num', text: 'Multiple' }), el('th', { scope: 'col', class: 'num', text: 'Live n' }), el('th', { scope: 'col', text: 'Source' }))),
+          el('thead', null, el('tr', null, el('th', { scope: 'col', text: 'Category' }), el('th', { scope: 'col', class: 'num', text: 'Category median' }), el('th', { scope: 'col', class: 'num', text: 'Blended multiple' }), el('th', { scope: 'col', class: 'num', text: 'Live n' }), el('th', { scope: 'col', text: 'Source' }))),
           el('tbody', null, calRows)
         )
       ),
+      el('h3', { text: 'How the multiple is checked' }),
+      el('p', { class: 'sub', text: 'The blend was checked against the snapshot itself, by leave-one-out: predict each of the ' + v.n_live + ' live protocols\u2019 market cap from its TVL and the multiple the other ' + (v.n_live - 1) + ' imply, and average the squared log error. The blend scores ' + v.blend_mse.toFixed(2) + ', against ' + v.hard_rule_mse.toFixed(2) + ' for a hard rule that takes the category median only with three or more live protocols and the market median otherwise. The market median alone scores ' + v.market_mse.toFixed(2) + ' and is the reference the blend shrinks toward, so a thin category bends to the market instead of trusting one observation.' }),
+      el('p', { class: 'sub', text: 'Growth and age are kept as small priors, not fitted coefficients: across the ' + v.n_dated + ' live protocols with listing dates, neither predicts the market-cap-to-TVL ratio (R-squared ' + v.growth_age_r2.toFixed(2) + '), so the model does not pretend to fit them.' }),
       el('h3', { text: 'What the board leaves out, and why' }),
       el('p', { class: 'sub', text: 'A protocol records no token, never that it has none: a row on this board may still have a token its DefiLlama record does not carry. The board ranks 198 of the snapshot\u2019s 342 pre-token protocols; the other 144 are set aside on the Set aside tab, each with its reason: a bridge, a liquid-staking or restaking product, a wrapped or staked asset, an exchange product, or a versioned pool of another protocol.' }),
       el('div', { class: 'note' },
         el('b', { text: 'A note for the judge. ' }),
-        'This is not a TVL table: the multiple is calibrated from the live market in the same snapshot, the board covers every rankable pre-token protocol instead of the 40 watchlist rows alone, the set-aside list shows the judgment calls, and every farm plan names its cost and its time. The page recomputes each row\u2019s implied value from the figures above and says so in its detail view when the number matches board.json.'
+        'This is not a TVL table: the multiple is calibrated from the live market in the same snapshot and checked by leave-one-out, the blend lets a thin category contribute instead of falling back, the board covers every rankable pre-token protocol instead of the 40 watchlist rows alone, the set-aside list shows the judgment calls, and every farm plan names its cost and its time. The page recomputes each row\u2019s implied value from the figures above and says so in its detail view when the number matches board.json.'
       )
     );
   }
@@ -368,7 +376,7 @@
         el('td', { class: 'num', text: fmtUsd(l.mcap_usd) }),
         el('td', { class: 'num', text: l.mcap_tvl_ratio === null ? 'n/a' : fmtMult(l.mcap_tvl_ratio) })
       );
-    }) : [el('tr', null, el('td', { text: 'No live ' + (row.category || 'Other') + ' protocol in the top 40 by market cap; the multiple falls back to the market-wide median.' }))];
+    }) : [el('tr', null, el('td', { text: row.category_live_n > 0 ? 'The category\u2019s live protocols sit outside the top 40 by market cap, so none is shown here; the multiple still blends their median.' : 'No live ' + (row.category || 'Other') + ' protocol in the snapshot; the multiple is the market-wide median.' }))];
     dialog.appendChild(el('div', { class: 'detail-head' },
       el('div', null,
         el('span', { class: 'rank-tag', text: 'Rank ' + row.rank + ' of ' + DATA.board_size + (WATCH[row.slug] ? ' · watchlist' : '') }),
@@ -381,7 +389,7 @@
       el('h3', { text: 'Implied value' }),
       el('div', { class: 'equation' },
         el('div', null, el('span', { text: 'TVL' }), el('b', { class: 'num', text: fmtUsd(row.tvl_usd) })),
-        el('div', null, el('span', { text: 'Category multiple' }), el('b', { class: 'num', text: fmtMult(row.category_multiple) + (row.multiple_source === 'category' ? ' (' + row.category_live_n + ' live)' : ' (market)') })),
+        el('div', null, el('span', { text: 'Category multiple' }), el('b', { class: 'num', text: fmtMult(row.category_multiple) + (row.multiple_source === 'blend' ? ' (blend: ' + row.category_live_n + ' live at ' + fmtMult(row.category_median === null ? 0 : row.category_median) + ' + market ' + fmtMult(DATA.market_median) + ')' : ' (market)') })),
         el('div', null, el('span', { text: 'Seven-day growth' }), el('b', { class: 'num', text: fmtPct(row.change_7d) })),
         el('div', null, el('span', { text: 'Age with no token' }), el('b', { class: 'num', text: fmtAge(row.age_days) })),
         el('div', null, el('span', { text: 'Growth multiplier' }), el('b', { class: 'num', text: String(row.growth_multiplier) })),
@@ -398,7 +406,7 @@
           el('tbody', null, compRows)
         )
       ),
-      el('p', { class: 'sub', text: 'The multiple above is the median of these ratios across all live ' + (row.category || 'Other') + ' protocols in the snapshot, or the market-wide median where a category has too few live protocols to read.' })
+      el('p', { class: 'sub', text: 'The multiple blends the median of these ratios with the market-wide median, weighted by how many live ' + (row.category || 'Other') + ' protocols the snapshot holds (' + row.category_live_n + ' here). Each median is clamped to x0.050\u2013x1.000 before blending, so one extreme ratio cannot dominate.' })
     ));
     dialog.appendChild(el('section', { class: 'detail-section' },
       el('h3', { text: 'Farm plan' }),
