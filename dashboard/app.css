@@ -30,9 +30,17 @@ h3 { font-size: 14px; margin: 18px 0 8px; text-transform: uppercase; letter-spac
 .pill { background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-size: 12px; color: var(--muted); }
 .pill b { color: var(--ink); font-weight: 600; }
 
-/* Lede */
-.lede { display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; padding: 22px 0 6px; }
-.lede p { margin: 0; color: var(--muted); max-width: 62ch; }
+/* Hero: lede beside the pricing panel */
+.hero { display: grid; grid-template-columns: 1.55fr 1fr; gap: 20px; padding: 22px 0 6px; align-items: start; }
+.lede { padding: 0; }
+.lede p { margin: 0 0 14px; color: var(--muted); max-width: 62ch; }
+.pricing { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+.pricing h2 { font-size: 15px; margin: 0 0 8px; }
+.pricing .formula { font-size: 12px; padding: 10px 12px; }
+.pricing .sub { margin: 8px 0 0; }
+.scatter { display: block; width: 100%; height: auto; }
+.gold-dot { color: var(--gold); }
+.cyan-dot { color: var(--accent); }
 .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .fact { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
 .fact span { display: block; font-size: 12px; color: var(--muted); }
@@ -88,6 +96,11 @@ td.num { text-align: right; }
 .status { display: inline-block; background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; font-size: 12px; color: var(--muted); white-space: nowrap; }
 .status.watch { color: var(--gold); border-color: #57534e; }
 .status.live { color: var(--green); }
+.verdict-cell { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.verdict { display: inline-block; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.v-farm { color: #052e1b; background: var(--green); }
+.v-thin { color: #451a03; background: var(--gold); }
+.v-skip { color: #450a0a; background: var(--red); }
 .empty { padding: 36px 20px; text-align: center; }
 .button { background: var(--accent); color: #04222b; border: none; border-radius: 8px; padding: 9px 16px; font: inherit; font-weight: 700; cursor: pointer; }
 .button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent-dim); }
@@ -122,7 +135,7 @@ dialog.detail::backdrop { background: rgba(3, 7, 18, .72); }
 .comps td, .comps th { padding: 6px 8px; }
 
 @media (max-width: 860px) {
-  .lede { grid-template-columns: 1fr; }
+  .hero { grid-template-columns: 1fr; }
   .picks { grid-template-columns: 1fr; }
   input[type="search"] { width: 100%; }
   .count { margin-left: 0; }
